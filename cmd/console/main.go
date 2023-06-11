@@ -1,5 +1,7 @@
 package main
 
-func main() {
+import "flag"
 
+func main() {
+	flag.NewFlagSet("asd", flag.ContinueOnError)
 }
