@@ -1,33 +1,76 @@
 package console
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net"
+	"os"
 )
 
-type CommandListener struct {
-	Host string
-	Port string
+func GetAdress() (address string) {
+	address = os.Getenv("CMD_ADDRESS")
+	if address == "" {
+		address = "localhost:51005"
+	}
+	return
 }
 
-func NewCommandListener(host string, port string) *CommandListener {
+func ListenCommands() error {
+	return NewCommandListener(GetAdress()).ListenCommands()
+}
+
+type CommandListener struct {
+	Address string
+}
+
+func NewCommandListener(address string) *CommandListener {
 	return &CommandListener{
-		Host: host,
-		Port: port,
+		Address: address,
 	}
 }
 
 func (c *CommandListener) ListenCommands() error {
-	l, err := net.Listen("tcp", c.Host+":"+c.Port)
+	l, err := net.Listen("tcp", c.Address)
 	if err != nil {
 		return err
 	}
 	defer l.Close()
 
-	// TODO acceptTCP
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			return err
+		}
 
-	return nil
+		go c.handleConnection(conn)
+	}
 }
 
-func ListenCommands() error {
-	return NewCommandListener("localhost", "51005").ListenCommands()
+func (c *CommandListener) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	buffer := make([]byte, 4)
+	_, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Błąd odczytu danych:", err.Error())
+		return
+	}
+	n := binary.BigEndian.Uint32(buffer)
+
+	fmt.Println("Received: ", n)
+
+	buffer = make([]byte, n)
+	_, err = conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Błąd odczytu danych:", err.Error())
+		return
+	}
+
+	fmt.Println("Received: ", buffer)
+	msg := MessageFromBytes(buffer)
+
+	in := &FlagParser{flags: msg.Flags}
+
+	commandInfoMap[msg.Name].ExecuteCallback(in, conn)
+
 }
